@@ -1,34 +1,62 @@
 import streamlit as st
+import yfinance as yf
+import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import requests # سنحاول استخدامه، وإذا لم يعمل، سيتجاوزه الكود
 
-# إعدادات الواجهة
-st.set_page_config(page_title="Options Engine", layout="wide")
+st.set_page_config(page_title="Pro Options Engine", layout="wide")
 
-st.title("🚀 Options Pricing Engine")
-
-# --- محاولة جلب البيانات ---
-try:
-    # استخدام requests لجلب البيانات
-    response = requests.get("https://api.massive.com/v1/market/prices?ticker=AAPL", timeout=3)
-    if response.status_code == 200:
-        spot_price = response.json().get("price", 180.25)
-    else:
-        spot_price = 180.25
-except:
-    spot_price = 180.25 # السعر الافتراضي في حال فشل أي شيء
-
-st.metric("سعر السهم الحالي", f"${spot_price:,.2f}")
-
-# --- عرض الجدول ---
-st.subheader("جدول العقود")
-# استخدمنا Markdown بدلاً من HTML المعقد لتجنب أي أخطاء في العرض
+# --- تحسين المظهر ---
 st.markdown("""
-| دلتا (Delta) | Spread $20 | Spread $25 |
-| :--- | :--- | :--- |
-| 0.10 | $2.1 | $2.6 |
-| 0.20 | $4.2 | $5.2 |
-""")
+    <style>
+    .main { background-color: #0e1117; }
+    h1, h2, h3 { color: #ccff00; }
+    </style>
+""", unsafe_allow_html=True)
 
-st.success("تم تشغيل التطبيق بنظام آمن!")
+# --- القائمة الجانبية ---
+st.sidebar.header("⚙️ Market Controls")
+ticker_symbol = st.sidebar.text_input("Enter Ticker", value="AAPL").upper()
+dte = st.sidebar.slider("DTE", 1, 365, 45)
+iv = st.sidebar.slider("IV (%)", 5, 150, 20)
+hv = st.sidebar.number_input("HV", 1, 150, 15)
+
+# --- جلب البيانات ---
+try:
+    ticker = yf.Ticker(ticker_symbol)
+    spot_price = ticker.history(period="1d")['Close'].iloc[-1]
+    st.sidebar.metric("Current Price", f"${spot_price:.2f}")
+except:
+    spot_price = 150.0
+    st.sidebar.error("Could not fetch live price, using $150.0")
+
+# --- عرض الميزات ---
+st.title("📊 Premium Strategy Engine")
+
+# 1. جدول المصفوفة الديناميكي
+deltas = [0.10, 0.20, 0.30, 0.50]
+spreads = [20.0, 25.0]
+
+data = []
+for d in deltas:
+    row = {"Delta": d}
+    for s in spreads:
+        row[f"${s} Spread"] = f"${(d*s*iv/20):.2f}"
+    data.append(row)
+
+df = pd.DataFrame(data)
+st.subheader("Premium Matrix")
+st.table(df)
+
+# 2. الرسوم البيانية (P&L Curve)
+st.subheader("Risk/Reward Curve")
+spread_width = st.selectbox("Select Spread Width", spreads)
+x = np.linspace(spot_price*0.9, spot_price*1.1, 100)
+y = [min(spread_width, max(-spread_width, spot_price - i)) for i in x]
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=x, y=y, mode='lines', name='P&L'))
+fig.update_layout(template="plotly_dark", xaxis_title="Stock Price", yaxis_title="Profit/Loss")
+st.plotly_chart(fig, use_container_width=True)
+
+st.success("🏁 النظام الآن بكامل ميزاته (الرسوم، الجداول، والحسابات)!")
