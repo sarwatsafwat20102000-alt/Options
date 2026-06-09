@@ -2,200 +2,206 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import scipy.stats as si
 import plotly.graph_objects as go
 
-# 1. إعدادات الصفحة المخصصة للعرض على الهواتف الذكية بأسلوب احترافي مريح
-st.set_page_config(
-    page_title="Premium Intelligence Engine",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# إعدادات الشاشة والمظهر الداكن المتوافق مع الجوال
+st.set_page_config(page_title="AI Options Pricing & Strategy Engine", layout="wide", initial_sidebar_state="expanded")
 
-# 2. واجهة التصميم المظلمة الفاخرة والألوان المتوافقة مع التطبيق الأصلي
+# تصميم مخصص للواجهة لمنع تداخل النصوص والخطوط
 st.markdown("""
-<style>
-    .block-container { padding-top: 1rem; padding-bottom: 1rem; background-color: #0d1117; }
-    h1, h2, h3, h4 { color: #ccff00 !important; font-family: 'Courier New', monospace; }
-    .stMetric { background-color: #161b22; padding: 12px; border-radius: 10px; border: 1px solid #30363d; }
-    .reportview-container { background: #0d1117; }
-</style>
+    <style>
+    .reportview-container { background: #0e1117; color: #e2e8f0; }
+    .sidebar .sidebar-content { background: #1a1f2c; }
+    div.stButton > button:first-child { background-color: #ff4b4b; color:white; }
+    h1, h2, h3 { color: #ccff00 !important; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .metric-box { padding: 15px; background: #1a1f2c; border-radius: 8px; border-left: 5px solid #ccff00; margin-bottom: 15px; }
+    </style>
 """, unsafe_allow_html=True)
 
-# 3. --- القائمة الجانبية: مدخلات السوق النشطة ---
-st.sidebar.header("📊 مدخلات السوق / MARKET INPUTS")
-ticker_input = st.sidebar.text_input("رمز السهم النشط (Ticker)", value="NVDA").upper().strip()
+# 1️⃣ وضع مفتاح الـ API الخاص بك من منصة Massive للربط المستقبلي
+MASSIVE_API_KEY = "pfjR_9mPAIHwbw8GqBc07DcXEMeLrEO4"
 
-@st.cache_resource
-def get_stock_details(ticker):
+# دالة جلب سعر السهم التلقائي المستقرة مع نظام أمان يحمي التطبيق من التوقف
+@st.cache_data(ttl=300)
+def get_stock_price(ticker):
     try:
         stock = yf.Ticker(ticker)
-        if stock.info and 'regularMarketPrice' in stock.info and stock.info['regularMarketPrice'] is not None:
-            return stock, float(stock.info['regularMarketPrice']), stock.info.get('longName', ticker)
-        else:
-            hist = stock.history(period="1d")
-            if not hist.empty:
-                return stock, float(hist['Close'].iloc[-1]), ticker
-            fallback_prices = {"NVDA": 208.64, "AAPL": 175.50, "TSLA": 180.20, "AMZN": 178.00, "MSFT": 420.00}
-            price = fallback_prices.get(ticker, 150.00)
-            return stock, price, f"{ticker} Corporation (Simulation Mode)"
+        price = stock.history(period="1d")['Close'].iloc[-1]
+        name = stock.info.get('longName', ticker)
+        return float(price), name
     except Exception:
-        fallback_prices = {"NVDA": 208.64, "AAPL": 175.50, "TSLA": 180.20, "AMZN": 178.00, "MSFT": 420.00}
-        price = fallback_prices.get(ticker, 150.00)
-        return None, price, f"{ticker} Corporation (Simulation Mode)"
+        # أسعار افتراضية ذكية لحماية السيرفر من التوقف في حال حظر طلبات ياهو المؤقتة
+        fallback = {"NVDA": 305.50, "AAPL": 180.25, "TSLA": 175.40, "AMZN": 185.10, "MSFT": 425.00}
+        return fallback.get(ticker.upper(), 150.00), f"{ticker.upper()} (Simulation Mode)"
 
-stock_obj, price_now, company_name = get_stock_details(ticker_input)
+# --- الواجهة الجانبية (شريط التحكم) ---
+st.sidebar.markdown("### 📊 MARKET INPUTS / مدخلات السوق")
+ticker_input = st.sidebar.text_input("Underlying Ticker / رمز السهم النشط", value="AAPL").upper()
 
-st.sidebar.metric(label=f"السعر الحالي المباشر لـ {ticker_input}", value=f"${price_now:.2f}")
-st.sidebar.markdown("---")
+spot_price, company_name = get_stock_price(ticker_input)
 
-# 4. --- معطيات النموذج الأساسية الحية (Model Parameters) ---
-st.sidebar.header("🎛️ ضبط متغيرات النموذج")
-dte = st.sidebar.slider("الأيام حتى الانتهاء (DTE)", 5, 365, 45)
-iv = st.sidebar.slider("(IV %) التقلب الضمني الحالي", 5, 120, 20)
-ivp = st.sidebar.slider("(IVP %) النسبة المئوية للتقلب", 0, 100, 50)
-hv = st.sidebar.number_input("(HV %) التقلب التاريخي المحسوب", value=15)
-
-# تحليل بيئة العمل الحالية وعرض بطاقة التوصية الذكية بناءً على المعطيات
-iv_hv_ratio = iv / hv if hv > 0 else 1.0
-
-# 5. --- الشاشة الرئيسية وعناوين المحرك ---
-st.title("📈 PREMIUM STRATEGY ENGINE")
-st.subheader(f"رمز السهم النشط: {ticker_input} — {company_name}")
-
-if iv_hv_ratio > 1.2:
-    badge_html = f"""
-    <div style='padding: 15px; background-color: #2c1a04; border-left: 5px solid #ff9900; border-radius: 5px; margin-bottom: 20px;'>
-        <b style='color: #ff9900; font-size: 1.1rem;'>ELEVATED PREMIUM (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
-        <span style='color: #e2e8f0; font-size: 0.95rem;'>Options premium is rich compared to real-world historical movement. PREFERENCE: Credit Spreads / Scaling out of Net Long Vega positions.</span>
-    </div>
-    """
-    st.markdown(badge_html, unsafe_allow_html=True)
-else:
-    badge_html = f"""
-    <div style='padding: 15px; background-color: #042416; border-left: 5px solid #198754; border-radius: 5px; margin-bottom: 20px;'>
-        <b style='color: #198754; font-size: 1.1rem;'>NEUTRAL / CHEAP ENVIRONMENT (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
-        <span style='color: #e2e8f0; font-size: 0.95rem;'>Options premium is fair or underpriced. PREFERENCE: Debit Spreads / Net Long Vega.</span>
-    </div>
-    """
-    st.markdown(badge_html, unsafe_allow_html=True)
-
-# 6. --- بناء جدول وعقود البريميوم الذكية (Premium Matrix Grid) ---
-st.markdown("### 🗺️ خريطة وجدولة أسعار العقود (Premium Matrix Grid)")
-
-spread_widths = [20.0, 22.5, 25.0, 27.5]
-delta_rows = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.75]
-
-# تطبيق معادلة التطبيق الرسمية الحية تماماً الظاهرة في ملفك المرجعي:
-# Mid Premium = Spread * Delta * (IV / 20%) * sqrt(DTE / 45)
-iv_scaling = iv / 20.0
-dte_decay = np.sqrt(dte / 45.0)
-
-html_table = "<table style='width:100%; border-collapse: collapse; background-color: #161b22; color: #e2e8f0; text-align: center; font-family: monospace;'>"
-html_table += "<tr style='background-color: #21262d; color: #ccff00; font-weight: bold; border-bottom: 2px solid #30363d;'>"
-html_table += "<th style='padding: 12px; border: 1px solid #30363d;'>Δ - DELTA</th>"
-for w in spread_widths:
-    html_table += f"<th style='padding: 12px; border: 1px solid #30363d;'>${w} SPREAD</th>"
-html_table += "</tr>"
-
-for d_val in delta_rows:
-    html_table += "<tr style='border-bottom: 1px solid #30363d;'>"
-    html_table += f"<td style='padding: 10px; font-weight: bold; background-color: #1f242c; border: 1px solid #30363d;'>{d_val:.2f}</td>"
-    
-    for width in spread_widths:
-        # حساب السعر الأوسط بناءً على المعادلة الحية المرفقة بصورك
-        mid_premium = width * d_val * iv_scaling * dte_decay
-        
-        # النطاق المقدر حول السعر الأوسط (بنسبة 12% تفاوتاً) الموضحة في النماذج الخاصة بك
-        lower_band = mid_premium * 0.88
-        upper_band = mid_premium * 1.12
-        
-        # نسبة البريميوم من عرض الفارق لتحديد التلوين الذكي
-        premium_ratio = (mid_premium / width) * 100
-        
-        # توزيع الألوان الدقيقة والتطابق اللوني للنظام الفني
-        if premium_ratio < 28:
-            bg_color = "#0f5132"       # مائل للخضار (رخيص)
-            text_color = "#d1e7dd"
-        elif 28 <= premium_ratio < 42:
-            bg_color = "#332701"       # عادل (ذهبي خافت)
-            text_color = "#fff3cd"
-        elif 42 <= premium_ratio < 58:
-            bg_color = "#2c1a04"       # غني (برتقالي داكن)
-            text_color = "#ffe699"
-        else:
-            bg_color = "#2c0404"       # مبالغ فيه (قرمزي)
-            text_color = "#f8d7da"
-            
-        cell_text = f"${lower_band:.1f} - ${upper_band:.1f}"
-        html_table += f"<td style='padding: 10px; background-color: {bg_color}; color: {text_color}; font-weight: bold; border: 1px solid #30363d;'>{cell_text}</td>"
-    html_table += "</tr>"
-
-html_table += "</table>"
-st.markdown(html_table, unsafe_allow_html=True)
-
-# توضيح دلالات الألوان في ذيل الجدول
-st.markdown("""
-<div style='margin-top: 10px; padding: 10px; background-color: #161b22; border-radius: 5px; border: 1px solid #30363d; font-size: 0.85rem; text-align: center;'>
-    <span style='color: #d1e7dd;'>■ Cheap (&lt;28%)</span> | 
-    <span style='color: #fff3cd;'>■ Fair (28-42%)</span> | 
-    <span style='color: #ffe699;'>■ Rich (42-58%)</span> | 
-    <span style='color: #f8d7da;'>■ Overpriced (&gt;58%)</span>
+st.sidebar.markdown(f"""
+<div class='metric-box'>
+    <span style='font-size:0.85rem; color:#8892b0;'>السعر اللحظي المباشر لـ {ticker_input}</span><br>
+    <span style='font-size:1.8rem; font-weight:bold; color:#ccff00;'>${spot_price:,.2f}</span>
 </div>
 """, unsafe_allow_html=True)
 
-# 7. --- قسم الرسوم والتحليلات البيانية المتقدمة لمنع مشاكل الـ EOF ---
-st.markdown("---")
-st.markdown("### 📊 الرسوم البيانية المتقدمة وإدارة مخاطر المحفظة")
+st.sidebar.markdown("### ⚙️ ضبط متغيرات النموذج")
+dte = st.sidebar.slider("(DTE) الأيام حتى الانتهاء", min_value=1, max_value=365, value=45)
+iv = st.sidebar.slider("التقلب الضمني الحالي (%) IV", min_value=5, max_value=150, value=20)
+ivp = st.sidebar.slider("(IVP %) النسبة المئوية للتقلب", min_value=0, max_value=100, value=50)
+hv = st.sidebar.number_input("(HV) التقلب التاريخي المحسوب", min_value=1, max_value=150, value=15)
 
+# --- الشاشة الرئيسية ---
+st.markdown("## 📊 PREMIUM STRATEGY ENGINE")
+st.markdown(f"### 🎯 رمز السهم النشط: {ticker_input} — {company_name}")
+
+# حساب نسبة بيئة البريميوم وعرض البطاقة الإرشادية الذكية
+iv_hv_ratio = iv / hv if hv > 0 else 1.0
+
+if iv_hv_ratio > 1.25:
+    status_color = "#d97706"
+    status_text = "ELEVATED PREMIUM (IV/HV: {:.2f} | IVP: {}%)".format(iv_hv_ratio, ivp)
+    recommendation = "Options premium is rich compared to real-world historical movement. PREFERENCE: Credit Spreads / Scaling out of Net Long Vega positions."
+elif iv_hv_ratio < 0.85:
+    status_color = "#059669"
+    status_text = "CHEAP PREMIUM (IV/HV: {:.2f} | IVP: {}%)".format(iv_hv_ratio, ivp)
+    recommendation = "Options premium is underpriced relative to historical volatility. PREFERENCE: Debit Spreads / Net Long Vega positions."
+else:
+    status_color = "#1e293b"
+    status_text = "FAIRLY PRICED PREMIUM (IV/HV: {:.2f} | IVP: {}%)".format(iv_hv_ratio, ivp)
+    recommendation = "Premium is in-line with current historical movement. Focus on directional structure or Theta collection."
+
+st.markdown(f"""
+<div style='background-color:{status_color}; padding:15px; border-radius:5px; border-left:5px solid #ccff00; margin-bottom:25px;'>
+    <b style='color:#ffffff; font-size:1.05rem;'>{status_text}</b><br>
+    <span style='color:#e2e8f0; font-size:0.95rem;'>{recommendation}</span>
+</div>
+""", unsafe_allow_html=True)
+
+# 2️⃣ بناء وحساب مصفوفة شبكة الأسعار (Premium Matrix Grid)
+st.markdown("### 🗺️ خريطة وجدولة أسعار العقود (Premium Matrix Grid)")
+
+deltas = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70, 0.75]
+spread_widths = [20.0, 22.5, 25.0, 27.5]
+
+# تطبيق المعادلة الأسية لجذر الوقت ومضاعف التقلب الإحصائي
+dte_decay = np.sqrt(dte / 45.0)
+iv_scaling = iv / 20.0
+
+html_table = """
+<table style='width:100%; border-collapse: collapse; text-align:center; background-color:#111622; font-family:monospace;'>
+    <thead>
+        <tr style='background-color:#1e2538; color:#ccff00; font-weight:bold; font-size:0.95rem;'>
+            <th style='padding:12px; border:1px solid #2e374f;'>Δ - DELTA</th>
+            <th style='padding:12px; border:1px solid #2e374f;'>$20.0 SPREAD</th>
+            <th style='padding:12px; border:1px solid #2e374f;'>$22.5 SPREAD</th>
+            <th style='padding:12px; border:1px solid #2e374f;'>$25.0 SPREAD</th>
+            <th style='padding:12px; border:1px solid #2e374f;'>$27.5 SPREAD</th>
+        </tr>
+    </thead>
+    <tbody>
+"""
+
+def get_cell_bg_color(ratio):
+    if ratio < 0.28: return "#064e3b"   # أخضر (Cheap)
+    elif ratio < 0.42: return "#78350f" # بني/ذهبي (Fair)
+    elif ratio < 0.58: return "#9a3412" # برتقالي (Rich)
+    else: return "#4c0519"              # بورغندي (Overpriced)
+
+for d_val in deltas:
+    html_table += f"<tr style='border-bottom:1px solid #2e374f;'><td style='padding:12px; font-weight:bold; color:#a0aec0; border:1px solid #2e374f;'>{d_val:.2f}</td>"
+    for width in spread_widths:
+        # حساب السعر المركزي الأساسي مدمجاً بكافة العوامل الرياضية والأسية
+        mid_premium = width * d_val * iv_scaling * dte_decay
+        
+        # حساب النطاق المتفاوت (+-12%)
+        lower_band = max(0.01, mid_premium * 0.88)
+        upper_band = mid_premium * 1.12
+        
+        premium_ratio = mid_premium / width if width > 0 else 0
+        bg_color = get_cell_bg_color(premium_ratio)
+        
+        html_table += f"""
+        <td style='background-color:{bg_color}; color:#ffffff; padding:12px; border:1px solid #2e374f; font-weight:bold;'>
+            ${lower_band:.1f} - ${upper_band:.1f}
+        </td>
+        """
+    html_table += "</tr>"
+
+html_table += "</tbody></table>"
+
+# عرض الجدول بشكل سليم ومفسر بالكامل لحل مشكلة الـ EOF
+st.markdown(html_table, unsafe_allow_html=True)
+
+# إضافة دليل الألوان المصغر (Legend) أسفل الجدول
+st.markdown("""
+<div style='text-align:center; margin-top:10px; font-size:0.8rem; color:#a0aec0;'>
+    <span style='background-color:#064e3b; padding:2px 8px; border-radius:3px; margin-right:10px;'>■ Cheap (&lt;28%)</span>
+    <span style='background-color:#78350f; padding:2px 8px; border-radius:3px; margin-right:10px;'>■ Fair (28-42%)</span>
+    <span style='background-color:#9a3412; padding:2px 8px; border-radius:3px; margin-right:10px;'>■ Rich (42-58%)</span>
+    <span style='background-color:#4c0519; padding:2px 8px; border-radius:3px;'>■ Overpriced (&gt;58%)</span>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# 3️⃣ قسم الرسوم البيانية المتقدمة وإدارة المخاطر
+st.markdown("### 📊 الرسوم البيانية المتقدمة وإدارة مخاطر المحفظة")
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("#### 1️⃣ منحنى المخاطر والأرباح المتوقعة (P&L Curve)")
-    selected_spread = st.selectbox("اختر عرض الفارق المستهدف (Spread)", spread_widths)
-    selected_delta = st.selectbox("اختر قيمة الدلتا المستهدفة للرسم", delta_rows)
+    selected_width = st.selectbox("اختر عرض الفارق المستهدف (Spread Width)", options=spread_widths, index=2)
+    selected_delta = st.selectbox("اختر قيمة الدلتا المستهدفة للرسم", options=deltas, index=4)
     
-    est_premium = selected_spread * selected_delta * iv_scaling * dte_decay
-    stock_range = np.linspace(price_now - (selected_spread * 1.5), price_now + (selected_spread * 1.5), 100)
+    target_premium = selected_width * selected_delta * iv_scaling * dte_decay
+    strike_price = spot_price * (1 + selected_delta)
     
-    pnl = []
-    strike_long = price_now - (selected_spread / 2)
-    strike_short = price_now + (selected_spread / 2)
-    
+    stock_range = np.linspace(spot_price * 0.85, spot_price * 1.15, 100)
+    pnl_range = []
     for s in stock_range:
-        payoff_long = max(0, s - strike_long)
-        payoff_short = max(0, s - strike_short)
-        net_payoff = payoff_long - payoff_short - est_premium
-        pnl.append(net_payoff)
+        if s <= strike_price:
+            pnl = target_premium
+        else:
+            pnl = target_premium - min(selected_width, s - strike_price)
+        pnl_range.append(pnl)
         
     fig_pnl = go.Figure()
-    fig_pnl.add_trace(go.Scatter(x=stock_range, y=pnl, name="P&L Profile", line=dict(color='#ccff00', width=3)))
-    fig_pnl.add_hline(y=0, line_dash="dash", line_color="#30363d")
-    fig_pnl.add_vline(x=price_now, line_dash="longdash", line_color="cyan", annotation_text="Spot Price")
-    
+    fig_pnl.add_trace(go.Scatter(x=stock_range, y=pnl_range, mode='lines', line=dict(color='#ccff00', width=3), name='P&L at Expiration'))
+    fig_pnl.add_trace(go.Scatter(x=[spot_price, spot_price], y=[min(pnl_range), max(pnl_range)], mode='lines', line=dict(color='#00e5ff', dash='dash'), name='Current Spot Price'))
     fig_pnl.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="سعر السهم عند الانتهاء ($)",
-        yaxis_title="صافي الربح / الخسارة ($)",
-        margin=dict(l=20, r=20, t=20, b=20)
+        template='plotly_dark',
+        margin=dict(l=20, r=20, t=20, b=20),
+        xaxis_title="($) سعر السهم عند الانتهاء",
+        yaxis_title="($) صافي الربح / الخسارة",
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig_pnl, use_container_width=True)
 
 with col2:
-    st.markdown("#### 2️⃣ حساسية سعر العقد مقابل التغير في التقلب الضمني (IV)")
-    iv_range = np.linspace(5, 120, 50)
-    premium_vs_iv = [selected_spread * selected_delta * (i / 20.0) * dte_decay for i in iv_range]
-    
+    st.markdown("#### 2️⃣ حساسية سعر العقد مقابل التغير في التقلب الضمني (IV Sensitivity)")
+    iv_sim_range = np.linspace(5, 120, 100)
+    sim_premiums = []
+    for iv_sim in iv_sim_range:
+        sim_decay = np.sqrt(dte / 45.0)
+        sim_scaling = iv_sim / 20.0
+        sim_prem = selected_width * selected_delta * sim_scaling * sim_decay
+        sim_premiums.append(sim_prem)
+        
     fig_iv = go.Figure()
-    fig_iv.add_trace(go.Scatter(x=iv_range, y=premium_vs_iv, name="Premium Expansion", line=dict(color='#ff9900', width=3)))
-    fig_iv.add_vline(x=iv, line_dash="dash", line_color="red", annotation_text="IV المحدد")
-    
+    fig_iv.add_trace(go.Scatter(x=iv_sim_range, y=sim_premiums, mode='lines', line=dict(color='#f97316', width=3), name='Estimated Premium'))
+    fig_iv.add_trace(go.Scatter(x=[iv, iv], y=[0, max(sim_premiums)], mode='lines', line=dict(color='#ef4444', dash='dash'), name='المحدد IV'))
     fig_iv.update_layout(
-        template="plotly_dark",
-        height=350,
-        xaxis_title="مستويات المحاكاة للتقلب الضمني (IV %)",
-        yaxis_title="القيمة التقديرية المسعرة للعقد ($)",
-        margin=dict(l=20, r=20, t=20, b=20)
+        template='plotly_dark',
+        margin=dict(l=20, r=20, t=20, b=20),
+        xaxis_title="(% IV) مستويات المحاكاة للتقلب الضمني",
+        yaxis_title="($) القيمة التقديرية المسعرة للعقد",
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig_iv, use_container_width=True)
 
