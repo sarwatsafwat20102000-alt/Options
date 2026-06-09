@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
-import pandas as pd
 import numpy as np
-import scipy.stats as si
 import plotly.graph_objects as go
 
 # إعدادات الشاشة والمظهر الداكن المتوافق مع الجوال
@@ -19,14 +17,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1️⃣ بيانات مفتاح الـ API الخاص بك من منصة Massive Data
+# 1️⃣ مفتاح الـ API الحقيقي الخاص بك والمأخوذ من لوحة Massive dashboard
 MASSIVE_API_KEY = "pfjR_9mPAIHwbw8GqBc07DcXEMeLrEO4"
 
 @st.cache_data(ttl=10)  # تحديث الكاش كل 10 ثوانٍ لمواكبة البث الحي
 def get_stock_price_massive(ticker):
     sym = ticker.upper().strip()
     try:
-        # استخدام المسار المباشر والمستقر لجلب الأسعار من السيرفر الرئيسي
+        # استخدام المسار المباشر للأسعار
         url = f"https://api.massive.com/v1/market/prices?ticker={sym}"
         headers = {
             "Authorization": f"Bearer {MASSIVE_API_KEY}",
@@ -38,10 +36,8 @@ def get_stock_price_massive(ticker):
         if response.status_code == 200:
             res_data = response.json()
             
-            # فحص وتفكيك الـ JSON بكافة الصياغات المتوقعة من سيرفر ماسيف
             price = None
             if isinstance(res_data, dict):
-                # فحص الحقول المباشرة أو المتداخلة في جذر الاستجابة
                 price = (res_data.get("price") or 
                          res_data.get("last_price") or 
                          res_data.get("data", {}).get("price") or
@@ -50,7 +46,7 @@ def get_stock_price_massive(ticker):
             if price is not None:
                 return float(price), f"{sym} Inc. (Live @ Massive API)"
         
-        # الأسعار الاحتياطية في حال تعثر الاتصال بالسيرفر الخارجي
+        # الأسعار الاحتياطية في حال عدم استجابة السيرفر
         fallbacks = {"NVDA": 305.50, "AAPL": 180.25, "TSLA": 175.40, "AMZN": 185.10, "MSFT": 425.00}
         return fallbacks.get(sym, 150.00), f"{sym} (Fallback Sync)"
         
@@ -79,7 +75,7 @@ ivp = st.sidebar.slider("(IVP %) النسبة المئوية للتقلب", min_
 hv = st.sidebar.number_input("(HV) التقلب التاريخي المحسوب", min_value=1, max_value=150, value=15)
 
 # --- الشاشة الرئيسية ---
-st.markdown("## 📊 PREMIUM STRATEGY ENGINE")
+st.markdown("<h2>📊 PREMIUM STRATEGY ENGINE</h2>", unsafe_allow_html=True)
 st.markdown(f"### 🎯 رمز السهم النشط: {ticker_input} — {company_name}")
 
 # حساب نسبة بيئة البريميوم وعرض البطاقة الإرشادية
@@ -153,7 +149,7 @@ for d_val in deltas:
 
 html_table += "</tbody></table>"
 
-# عرض جدول الـ HTML بطريقة صحيحة لحل مشكلة النصوص الخام المتداخلة
+# السطر الحاسم لعرض جدول الـ HTML كـ تصميم حقيقي وليس كنص خام
 st.markdown(html_table, unsafe_allow_html=True)
 
 # دليل الألوان أسفل الجدول
@@ -225,4 +221,4 @@ with col2:
     )
     st.plotly_chart(fig_iv, use_container_width=True)
 
-st.success("🏁 تم تحديث بنية معالجة مصفوفة البيانات وجلب السعر الحي بنجاح.")
+st.success("🏁 تم تحديث الكود بالكامل، وتمت إزالة الاستدعاءات التالفة واحتواء جدول البيانات.")
