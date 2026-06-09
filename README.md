@@ -1,4 +1,3 @@
-```yaml
 ---
 title: Options App
 emoji: 📈
