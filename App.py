@@ -2,138 +2,140 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 
-# 1. إعدادات الصفحة لتناسب شاشات الموبايل والمظهر الداكن المتطور
+# إعدادات الصفحة لتناسب شاشات الموبايل والمظهر الداكن
 st.set_page_config(
     page_title="Premium Strategy Engine",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# تجميل الواجهة ومحاكاة الألوان الداكنة والفسفورية مثل الصور تماماً
+# تصميم مخصص ومطابق لألوان تطبيقك (أسود، رمادي داكن، وفسفوري)
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem; padding-bottom: 1rem; background-color: #0d1117; }
     h1, h2, h3 { color: #ccff00 !important; font-family: 'Courier New', monospace; }
     .stMetric { background-color: #161b22; padding: 12px; border-radius: 10px; border: 1px solid #30363d; }
-    div[data-testid="stDataFrame"] { background-color: #161b22; }
     .reportview-container { background: #0d1117; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- الجانب الأيسر: مدخلات السوق والمعاملات الشاملة ---
+# --- الجانب الأيسر: مدخلات السوق والمعاملات ---
 st.sidebar.header("📊 مدخلات السوق")
 ticker_input = st.sidebar.text_input("أدخل رمز السهم المتداول", value="NVDA").upper()
 
-# جلب بيانات السهم والاسم بالكامل من ياهو فاينانس
+# دالة جلب البيانات مع تخزين مؤقت آمن (إصلاح الخطأ السابق)
 @st.cache_data(ttl=60)
-def get_stock_details(symbol):
+def get_stock_basic_data(symbol):
     try:
         stock = yf.Ticker(symbol)
         hist = stock.history(period="1d")
         if hist.empty:
-            return None, None, "غير معروف"
-        current_price = hist['Close'].iloc[-1]
-        # محاولة جلب الاسم الكامل للشركة
+            return None, "غير معروف"
+        current_price = float(hist['Close'].iloc[-1])
         long_name = stock.info.get('longName', symbol)
-        return stock, current_price, long_name
+        return current_price, long_name
     except:
-        return None, None, "غير معروف"
+        return None, "غير معروف"
 
-stock_obj, price_now, company_name = get_stock_details(ticker_input)
+price_now, company_name = get_stock_basic_data(ticker_input)
 
 if price_now is None:
     st.error("⚠️ تعذر جلب بيانات السهم السحابية. يرجى التحقق من رمز السهم المكتوب.")
     st.stop()
 
-# --- عرض اسم السهم والشركة بشكل بارز ومباشر بناءً على طلبك ---
-st.title(f"📈 Premium Schedule Dashboard")
-st.subheader(f"رمز السهم المختار حالياً: {ticker_input} — ({company_name})")
+# --- عرض اسم السهم والشركة بشكل بارز ومباشر في الأعلى ---
+st.title("📈 PREMIUM SCHEDULE")
+st.subheader(f"رمز السهم النشط: {ticker_input} — {company_name}")
 
-st.sidebar.metric(label="سعر السهم الحالي الحقيقي", value=f"${price_now:.2f}")
+st.sidebar.metric(label=f"سعر {ticker_input} الحالي المباشر", value=f"${price_now:.2f}")
 
 st.sidebar.markdown("---")
-st.sidebar.header("🎛️ ضبط متغيرات النموذج الديناميكي")
+st.sidebar.header("🎛️ ضبط متغيرات النموذج")
 dte = st.sidebar.slider("الأيام حتى الانتهاء (DTE)", 5, 365, 45)
 iv = st.sidebar.slider("التقلب الضمني الحالي (IV %)", 5, 120, 20)
 ivp = st.sidebar.slider("نسبة مئوية للتقلب الضمني (IVP %)", 0, 100, 50)
 hv = st.sidebar.number_input("التقلب التاريخي المحسوب (HV %)", value=15)
 
-# حساب بيئة الأسعار التلقائية مقارنة بصورتك (Elevated Premium / Neutral)
+# حساب بيئة الأسعار التلقائية ومحاكاة البطاقة الملونة في الصورة
 iv_hv_ratio = iv / hv if hv > 0 else 1.0
 if iv_hv_ratio > 1.2:
-    env_status = "ELEVATED PREMIUM 🟠"
-    env_desc = "البريميوم غالي مقارنة بالحركة التاريخية الحقيقية للسهم. الاستراتيجية المفضلة: Credit Spreads."
+    st.markdown(f"""
+    <div style='padding: 15px; background-color: #2c1a04; border-left: 5px solid #ff9900; border-radius: 5px; margin-bottom: 20px;'>
+        <b style='color: #ff9900; font-size: 1.1rem;'>ELEVATED PREMIUM (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
+        <span style='color: #e2e8f0; font-size: 0.95rem;'>البريميوم غالي مقارنة بالحركة التاريخية الحقيقية للسهم. الاستراتيجية المفضلة: Credit Spreads.</span>
+    </div>
+    """, unsafe_allow_html=True)
 else:
-    env_status = "NEUTRAL / CHEAP ENVIRONMENT 🟢"
-    env_desc = "أسعار العقود عادلة أو رخيصة نسبياً. الاستراتيجية المفضلة: Debit Spreads / Net Long Vega."
+    st.markdown(f"""
+    <div style='padding: 15px; background-color: #042c11; border-left: 5px solid #00ff00; border-radius: 5px; margin-bottom: 20px;'>
+        <b style='color: #00ff00; font-size: 1.1rem;'>NEUTRAL / CHEAP ENVIRONMENT (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
+        <span style='color: #e2e8f0; font-size: 0.95rem;'>أسعار العقود عادلة أو رخيصة نسبياً. الاستراتيجية المفضلة: Debit Spreads / Net Long Vega.</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.warning(f"**حالة السوق الحالية:** {env_status}\n\n*تحليل البيئة:* {env_desc} (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)")
+# --- بناء خريطة وجدولة الأسعار التفاعلية الملونة (Heatmap Grid) ---
+st.markdown("### 🗺️ خريطة وجدولة أسعار العقود (Premium Matrix Grid)")
 
-# --- بناء خريطة أسعار البريميوم ومصفوفة الدلتا (نفس هيكل صورك المرفقة) ---
-st.markdown("### 🗺️ خريطة وجدولة الأسعار التفاعلية (Premium Matrix Grid)")
-st.write("الجدول يوضح النطاق السعري التقديري للـ Spreads بناءً على معادلة حركة الأسعار واليونانيات المتأثرة ديناميكياً:")
-
-# محاكاة الأعمدة (حجم الـ Spreads المتداولة في الصورة: $20, $22.5, $25, $27.5)
-spread_widths = [20.0, 22.5, 25.0, 27.5, 30.0]
-# محاكاة الأسطر (قيم الـ Delta المتنوعة من العميق خارج الحساب إلى داخل الحساب)
+# تحديد أعمدة الـ Spreads وقيم الـ Delta المتوافقة مع الصورة المرفقة
+spread_widths = [20.0, 22.5, 25.0, 27.5]
 delta_rows = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70]
 
-# تطبيق الصيغة الحية المدخلة بالكامل من صورتك لحساب قيمة الخلية السعرية
-# Formula: Mid = Spread * Delta * (IV / 20) * sqrt(DTE / 45)
 iv_factor = iv / 20.0
 dte_factor = np.sqrt(dte / 45.0)
 
-matrix_data = []
+# إنشاء مصفوفة مخصصة كلياً باستخدام HTML لتلوين الخلايا بشكل احترافي دقيق
+html_table = "<table style='width:100%; border-collapse: collapse; background-color: #161b22; color: #e2e8f0; text-align: center; font-family: monospace;'>"
+html_table += "<tr style='background-color: #21262d; color: #ccff00; font-weight: bold; border-bottom: 2px solid #30363d;'>"
+html_table += "<th style='padding: 12px; border: 1px solid #30363d;'>Δ - DELTA</th>"
+for w in spread_widths:
+    html_table += f"<th style='padding: 12px; border: 1px solid #30363d;'>${w} SPREAD</th>"
+html_table += "</tr>"
+
 for d_val in delta_rows:
-    row_dict = {"Δ - DELTA (الاتجاه)": f"{d_val:.2f}"}
+    html_table += f"<tr style='border-bottom: 1px solid #30363d;'>"
+    html_table += f"<td style='padding: 10px; font-weight: bold; background-color: #1f242c; border: 1px solid #30363d;'>{d_val:.2f}</td>"
+    
     for width in spread_widths:
-        # حساب السعر الأوسط المستهدف ديناميكياً بناءً على المعادلة الحرفية
+        # حساب السعر الأوسط الفعلي بناءً على معادلة الصورة المعطاة
         mid_premium = width * d_val * iv_factor * dte_factor
-        # النطاق المتوقع (Range Band +/- 12% حول المتوسط كما في صورتك)
         lower_band = mid_premium * 0.88
         upper_band = mid_premium * 1.12
         
-        # وضع النطاق السعري الكامل داخل خلية الجدول لسهولة القراءة من الهاتف
-        row_dict[f"${width} Spread"] = f"${lower_band:.1f} - ${upper_band:.1f}"
-    matrix_data.append(row_dict)
+        # نسبة البريميوم من حجم السبريد لتحديد درجة اللون (Heatmap)
+        premium_ratio = (mid_premium / width) * 100
+        
+        # تحديد لون النص والخلفية بناءً على المعايير التوضيحية المذكورة في صورتك
+        if premium_ratio < 28:
+            bg_color = "#042c11"   # أخضر داكن (رخيص)
+            text_color = "#00ff00"
+        elif 28 <= premium_ratio < 42:
+            bg_color = "#2c2a04"   # أصفر/زيتوني (عادل)
+            text_color = "#ffcc00"
+        elif 42 <= premium_ratio < 58:
+            bg_color = "#2c1a04"   # برتقالي داكن (مرتفع)
+            text_color = "#ff9900"
+        else:
+            bg_color = " #2c0404"  # أحمر داكن (متضخم وفرصة بيع)
+            text_color = "#ff3333"
+            
+        cell_text = f"${lower_band:.1f} - ${upper_band:.1f}"
+        html_table += f"<td style='padding: 10px; background-color: {bg_color}; color: {text_color}; font-weight: bold; border: 1px solid #30363d;'>{cell_text}</td>"
+    html_table += "</tr>"
 
-df_matrix = pd.DataFrame(matrix_data)
-st.dataframe(df_matrix.set_index("Δ - DELTA (الاتجاه)"), use_container_width=True)
+html_table += "</table>"
 
-# إضافة دليل الألوان التوضيحي للـ Heatmap أسفل الجدول مباشرة لمحاكاة نظام التطبيق المرفق
+# عرض الجدول الملون المصمم خصيصاً للموبايل
+st.markdown(html_table, unsafe_allow_html=True)
+
+# إضافة دليل الألوان أسفل الجدول مباشرة
 st.markdown("""
-<div style='padding: 10px; background-color: #161b22; border-radius: 5px; border: 1px solid #30363d; font-size: 0.9rem;'>
-    <span style='color: #00ff00;'>■ رخيص جداً (&lt;28%)</span> | 
-    <span style='color: #ffcc00;'>■ سعر عادل (28-42%)</span> | 
-    <span style='color: #ff9900;'>■ مرتفع وقيم غنية (42-58%)</span> | 
-    <span style='color: #ff3333;'>■ متضخم وفرص بيع ممتازة (&gt;58%)</span>
+<div style='margin-top: 10px; padding: 10px; background-color: #161b22; border-radius: 5px; border: 1px solid #30363d; font-size: 0.85rem; text-align: center;'>
+    <span style='color: #00ff00;'>■ Cheap (&lt;28%)</span> | 
+    <span style='color: #ffcc00;'>■ Fair (28-42%)</span> | 
+    <span style='color: #ff9900;'>■ Rich (42-58%)</span> | 
+    <span style='color: #ff3333;'>■ Overpriced (&gt;58%)</span>
 </div>
 """, unsafe_allow_html=True)
 
-# --- الرسم البياني الفني لعمق أسعار التنفيذ الحالي لتأكيد مرونة البيانات ---
-st.markdown("### 📊 الهيكل الفني وتوزيع الانحراف السعري للـ Strikes")
-
-# توليد نقاط أسعار التنفيذ (Strikes) حول السعر الحالي حياً للسهم المختار
-strikes_built = np.linspace(price_now * 0.85, price_now * 1.15, 7)
-estimated_calls = [max(0.5, (price_now - k) * 0.5 + (iv*1.2)) for k in strikes_built]
-
-fig = go.Figure()
-fig.add_trace(go.Bar(
-    x=[f"${k:.1f}" for k in strikes_built],
-    y=estimated_calls,
-    name='حجم البريميوم المتوقع لأسعار التنفيذ',
-    marker_color='#ccff00'
-))
-fig.add_layout_image()
-fig.update_layout(
-    template="plotly_dark",
-    height=300,
-    margin=dict(l=10, r=10, t=20, b=10),
-    xaxis_title="سعر التنفيذ المستهدف (Strike)",
-    yaxis_title="تقدير التكلفة الكلية للـ Contract ($)"
-)
-st.plotly_chart(fig, use_container_width=True)
-
-st.success("💡 المحرك الآن يعالج العوامل بالكامل: حجم الفارق السعري، قيمة دلتا الاتجاهية، التسارع، والاضمحلال الزمني بالتوافق مع شاشة هاتف الذكي.")
+st.success("💡 تم إصلاح خطأ السيرفر بنجاح والمحرك الآن يعمل بشكل ديناميكي كامل ومتوافق مع الرؤية الفنية الحسابية المتطورة.")
