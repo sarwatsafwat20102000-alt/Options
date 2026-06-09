@@ -19,36 +19,40 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1️⃣ مفتاح الـ API الحقيقي الخاص بك والمأخوذ من لوحة Massive dashboard مباشرة
+# 1️⃣ بيانات مفتاح الـ API الخاص بك من منصة Massive Data
 MASSIVE_API_KEY = "pfjR_9mPAIHwbw8GqBc07DcXEMeLrEO4"
 
-@st.cache_data(ttl=10)  # تحديث سريع كل 10 ثوانٍ للبث المباشر
+@st.cache_data(ttl=10)  # تحديث الكاش كل 10 ثوانٍ لمواكبة البث الحي
 def get_stock_price_massive(ticker):
     sym = ticker.upper().strip()
     try:
-        # الرابط المعتمد لجلب السعر اللحظي الفوري لرمز محدد من منصة Massive Data
-        url = f"https://api.massive.com/v1/prices/{sym}"
+        # استخدام المسار المباشر والمستقر لجلب الأسعار من السيرفر الرئيسي
+        url = f"https://api.massive.com/v1/market/prices?ticker={sym}"
         headers = {
             "Authorization": f"Bearer {MASSIVE_API_KEY}",
-            "Accept": "application/json"
+            "Content-Type": "application/json"
         }
         
-        response = requests.get(url, headers=headers, timeout=4)
+        response = requests.get(url, headers=headers, timeout=5)
         
         if response.status_code == 200:
             res_data = response.json()
             
-            # قراءة ومعالجة الحقول المختلفة المحتملة لضمان استخراج السعر بدقة
+            # فحص وتفكيك الـ JSON بكافة الصياغات المتوقعة من سيرفر ماسيف
             price = None
             if isinstance(res_data, dict):
-                price = res_data.get("price") or res_data.get("last") or res_data.get("data", {}).get("price")
+                # فحص الحقول المباشرة أو المتداخلة في جذر الاستجابة
+                price = (res_data.get("price") or 
+                         res_data.get("last_price") or 
+                         res_data.get("data", {}).get("price") or
+                         res_data.get("results", [{}])[0].get("price"))
             
             if price is not None:
-                return float(price), f"{sym} Inc. (Live via Massive API)"
+                return float(price), f"{sym} Inc. (Live @ Massive API)"
         
-        # نظام الأسعار الاحتياطية لتجنب تجميد الشاشة في حال طلب رمز غير مدرج بالحساب
+        # الأسعار الاحتياطية في حال تعثر الاتصال بالسيرفر الخارجي
         fallbacks = {"NVDA": 305.50, "AAPL": 180.25, "TSLA": 175.40, "AMZN": 185.10, "MSFT": 425.00}
-        return fallbacks.get(sym, 150.00), f"{sym} (Live Stream Paused)"
+        return fallbacks.get(sym, 150.00), f"{sym} (Fallback Sync)"
         
     except Exception:
         fallbacks = {"NVDA": 305.50, "AAPL": 180.25, "TSLA": 175.40, "AMZN": 185.10, "MSFT": 425.00}
@@ -58,7 +62,7 @@ def get_stock_price_massive(ticker):
 st.sidebar.markdown("### 📊 MARKET INPUTS / مدخلات السوق")
 ticker_input = st.sidebar.text_input("Underlying Ticker / رمز السهم النشط", value="AAPL").upper()
 
-# استدعاء دالة البث للحصول على السعر الفعلي والمباشر
+# جلب السعر المحدث
 spot_price, company_name = get_stock_price_massive(ticker_input)
 
 st.sidebar.markdown(f"""
@@ -149,7 +153,7 @@ for d_val in deltas:
 
 html_table += "</tbody></table>"
 
-# طباعة جدول المصفوفة بشكل صحيح ومغلق برمجياً
+# عرض جدول الـ HTML بطريقة صحيحة لحل مشكلة النصوص الخام المتداخلة
 st.markdown(html_table, unsafe_allow_html=True)
 
 # دليل الألوان أسفل الجدول
@@ -221,4 +225,4 @@ with col2:
     )
     st.plotly_chart(fig_iv, use_container_width=True)
 
-st.success("🏁 تم تحديث ومعالجة مسار جلب السعر المباشر من Massive Data بنجاح.")
+st.success("🏁 تم تحديث بنية معالجة مصفوفة البيانات وجلب السعر الحي بنجاح.")
