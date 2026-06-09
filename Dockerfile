@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir streamlit yfinance ta pandas numpy requests scipy plotly
+RUN pip install --no-cache-dir streamlit yfinance pandas numpy scipy plotly
 
 COPY . .
 
