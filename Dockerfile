@@ -2,14 +2,12 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# تثبيت أدوات النظام الأساسية
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# تثبيت كافة المكتبات الرياضية والبيانية المطلوبة للمحرك الديناميكي دفعة واحدة
 RUN pip install --no-cache-dir streamlit yfinance ta pandas numpy requests scipy plotly
 
 COPY . .
