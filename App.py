@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from scipy.stats import norm
 
 # Page configuration optimized for mobile and professional dark UI
 st.set_page_config(
@@ -65,102 +66,4 @@ if iv_hv_ratio > 1.2:
     st.markdown(f"""
     <div style='padding: 15px; background-color: #2c1a04; border-left: 5px solid #ff9900; border-radius: 5px; margin-bottom: 20px;'>
         <b style='color: #ff9900; font-size: 1.1rem;'>ELEVATED PREMIUM (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
-        <span style='color: #e2e8f0; font-size: 0.95rem;'>Options premium is rich compared to real-world historical movement. Preferred Strategy: Credit Spreads (Net Short Vega).</span>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown(f"""
-    <div style='padding: 15px; background-color: #042416; border-left: 5px solid #198754; border-radius: 5px; margin-bottom: 20px;'>
-        <b style='color: #198754; font-size: 1.1rem;'>NEUTRAL / CHEAP ENVIRONMENT (IV/HV: {iv_hv_ratio:.2f} | IVP: {ivp}%)</b><br>
-        <span style='color: #e2e8f0; font-size: 0.95rem;'>Options premium is fair or underpriced. Preferred Strategy: Debit Spreads (Net Long Vega).</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- Premium Matrix Grid ---
-st.markdown("### 🗺️ PREMIUM MATRIX GRID")
-
-spread_widths = [20.0, 22.5, 25.0, 27.5]
-delta_rows = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50, 0.60, 0.70]
-
-iv_factor = iv / 20.0
-dte_factor = np.sqrt(dte / 45.0)
-
-html_table = "<table style='width:100%; border-collapse: collapse; background-color: #161b22; color: #e2e8f0; text-align: center; font-family: monospace;'>"
-html_table += "<tr style='background-color: #21262d; color: #ccff00; font-weight: bold; border-bottom: 2px solid #30363d;'>"
-html_table += "<th style='padding: 12px; border: 1px solid #30363d;'>Δ - DELTA</th>"
-for w in spread_widths:
-    html_table += f"<th style='padding: 12px; border: 1px solid #30363d;'>${w} SPREAD</th>"
-html_table += "</tr>"
-
-for d_val in delta_rows:
-    html_table += f"<tr style='border-bottom: 1px solid #30363d;'>"
-    html_table += f"<td style='padding: 10px; font-weight: bold; background-color: #1f242c; border: 1px solid #30363d;'>{d_val:.2f}</td>"
-    
-    for width in spread_widths:
-        mid_premium = width * d_val * iv_factor * dte_factor
-        lower_band = mid_premium * 0.88
-        upper_band = mid_premium * 1.12
-        premium_ratio = (mid_premium / width) * 100
-        
-        # Professional and highly readable color coding scheme
-        if premium_ratio < 28:
-            bg_color = "#0f5132"       # Muted deep emerald green for clear text visibility
-            text_color = "#d1e7dd"     # Soft crisp green text
-        elif 28 <= premium_ratio < 42:
-            bg_color = "#332701"       # Deep dark gold/yellow
-            text_color = "#fff3cd"     # Soft cream yellow text
-        elif 42 <= premium_ratio < 58:
-            bg_color = "#2c1a04"       # Deep dark orange
-            text_color = "#ffe699"     # Soft orange/peach text
-        else:
-            bg_color = "#2c0404"       # Muted deep burgundy red
-            text_color = "#f8d7da"     # Soft light red text
-            
-        cell_text = f"${lower_band:.1f} - ${upper_band:.1f}"
-        html_table += f"<td style='padding: 10px; background-color: {bg_color}; color: {text_color}; font-weight: bold; border: 1px solid #30363d;'>{cell_text}</td>"
-    html_table += "</tr>"
-
-html_table += "</table>"
-st.markdown(html_table, unsafe_allow_html=True)
-
-# Legend Layout
-st.markdown("""
-<div style='margin-top: 10px; padding: 10px; background-color: #161b22; border-radius: 5px; border: 1px solid #30363d; font-size: 0.85rem; text-align: center;'>
-    <span style='color: #d1e7dd;'>■ Cheap (&lt;28%)</span> | 
-    <span style='color: #fff3cd;'>■ Fair (28-42%)</span> | 
-    <span style='color: #ffe699;'>■ Rich (42-58%)</span> | 
-    <span style='color: #f8d7da;'>■ Overpriced (&gt;58%)</span>
-</div>
-""", unsafe_allow_html=True)
-
-# --- Graphs & Analytics Section ---
-st.markdown("---")
-st.markdown("### 📊 ADVANCED RISK & GREEKS ANALYTICS")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("#### 1️⃣ P&L Risk Profile Curve (At Expiration)")
-    selected_spread = st.selectbox("Select Spread Width for Graphing", spread_widths)
-    selected_delta = st.selectbox("Select Target Delta for Graphing", delta_rows)
-    
-    est_premium = selected_spread * selected_delta * iv_factor * dte_factor
-    stock_range = np.linspace(price_now - (selected_spread * 1.5), price_now + (selected_spread * 1.5), 100)
-    
-    pnl = []
-    strike_long = price_now - (selected_spread / 2)
-    strike_short = price_now + (selected_spread / 2)
-    
-    for s in stock_range:
-        payoff_long = max(0, s - strike_long)
-        payoff_short = max(0, s - strike_short)
-        net_payoff = payoff_long - payoff_short - est_premium
-        pnl.append(net_payoff)
-        
-    fig_pnl = go.Figure()
-    fig_pnl.add_trace(go.Scatter(x=stock_range, y=pnl, name="P&L Profile", line=dict(color='#ccff00', width=3)))
-    fig_pnl.add_hline(y=0, line_dash="dash", line_color="#30363d")
-    fig_pnl.add_vline(x=price_now, line_dash="longdash", line_color="cyan", annotation_text="Spot Price")
-    
-    fig_pnl.update_layout(
-        template
+        <span style='color: #e2e8f0; font-size: 0.95rem;'>Options premium is rich compared to real-world historical movement
