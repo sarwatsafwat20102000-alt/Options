@@ -1,18 +1,17 @@
-```dockerfile
 FROM python:3.9-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y build-essential curl software-properties-common git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY Requirments.txt .
-
-RUN pip install --no-cache-dir -r Requirments.txt
+RUN pip install --no-cache-dir streamlit yfinance ta pandas numpy requests
 
 COPY . .
 
 EXPOSE 7860
-
-HEALTHCHECK CMD curl --fail http://localhost:7860/_stcore/health
 
 ENTRYPOINT ["streamlit", "run", "App.py", "--server.port=7860", "--server.address=0.0.0.0"]
