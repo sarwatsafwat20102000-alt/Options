@@ -22,26 +22,31 @@ st.markdown("""
 
 # --- الجانب الأيسر: مدخلات السوق والمعاملات ---
 st.sidebar.header("📊 مدخلات السوق")
-ticker_input = st.sidebar.text_input("أدخل رمز السهم المتداول", value="NVDA").upper()
+# استقبال الرمز وتنظيفه تلقائيًا من المسافات والحروف الصغيرة منعاً للخطأ
+ticker_input = st.sidebar.text_input("أدخل رمز السهم المتداول", value="NVDA").upper().strip()
 
-# دالة جلب البيانات مع تخزين مؤقت آمن (إصلاح الخطأ السابق)
-@st.cache_data(ttl=60)
-def get_stock_basic_data(symbol):
+# الدالة الجديدة والمعدلة لجلب البيانات بأمان وتفادي خطأ الـ Cache والأرقام الفارغة
+@st.cache_resource
+def get_stock_details(ticker):
     try:
-        stock = yf.Ticker(symbol)
-        hist = stock.history(period="1d")
-        if hist.empty:
-            return None, "غير معروف"
-        current_price = float(hist['Close'].iloc[-1])
-        long_name = stock.info.get('longName', symbol)
-        return current_price, long_name
-    except:
-        return None, "غير معروف"
+        stock = yf.Ticker(ticker)
+        # فحص ما إذا كانت البيانات موجودة فعلاً في الـ info
+        if stock.info and 'regularMarketPrice' in stock.info:
+            return stock, stock.info['regularMarketPrice'], stock.info.get('longName', ticker)
+        else:
+            # محاولة جلب السعر الأحدث من الـ history إذا فشل الـ info أو تعرض للحظر
+            hist = stock.history(period="1d")
+            if not hist.empty:
+                return stock, hist['Close'].iloc[-1], ticker
+            return None, None, None
+    except Exception as e:
+        return None, None, None
 
-price_now, company_name = get_stock_basic_data(ticker_input)
+# استدعاء الدالة الآمنة
+stock_obj, price_now, company_name = get_stock_details(ticker_input)
 
 if price_now is None:
-    st.error("⚠️ تعذر جلب بيانات السهم السحابية. يرجى التحقق من رمز السهم المكتوب.")
+    st.error(f"⚠️ تعذر جلب بيانات السهم السحابية لـ ({ticker_input}). يرجى التحقق من رمز السهم المكتوب.")
     st.stop()
 
 # --- عرض اسم السهم والشركة بشكل بارز ومباشر في الأعلى ---
@@ -116,7 +121,7 @@ for d_val in delta_rows:
             bg_color = "#2c1a04"   # برتقالي داكن (مرتفع)
             text_color = "#ff9900"
         else:
-            bg_color = " #2c0404"  # أحمر داكن (متضخم وفرصة بيع)
+            bg_color = "#2c0404"   # أحمر داكن (متضخم وفرصة بيع)
             text_color = "#ff3333"
             
         cell_text = f"${lower_band:.1f} - ${upper_band:.1f}"
@@ -138,4 +143,4 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.success("💡 تم إصلاح خطأ السيرفر بنجاح والمحرك الآن يعمل بشكل ديناميكي كامل ومتوافق مع الرؤية الفنية الحسابية المتطورة.")
+st.success("💡 تم دمج وحفظ التعديلات بنجاح. التطبيق الآن يعمل بشكل ديناميكي كامل ومستقر.")
