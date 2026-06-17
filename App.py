@@ -4,22 +4,28 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-def check_signals(ticker, stock_info, hist):
-    # 1. شرط السعر والحجم (فني)
-    # نتحقق من أن السعر في آخر يومين في تناقص، والحجم في تزايد
+# إعدادات الصفحة
+st.set_page_config(page_title="Premium Intelligence Engine", layout="wide", initial_sidebar_state="expanded")
+
+# دالة الإشارات الذكية المدمجة (الخطوة 1)
+@st.cache_resource
+def get_advanced_signals(ticker):
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="5d")
+    # الفني: نقص سعر ليومين + زيادة حجم ليومين
     price_drop = (hist['Close'].iloc[-1] < hist['Close'].iloc[-2]) and (hist['Close'].iloc[-2] < hist['Close'].iloc[-3])
     vol_inc = (hist['Volume'].iloc[-1] > hist['Volume'].iloc[-2]) and (hist['Volume'].iloc[-2] > hist['Volume'].iloc[-3])
-    
-    # 2. شرط الأساسيات (Fundamental)
-    # نستخدم مكرر الربحية (Forward PE) كمثال لتقييم القيمة
-    pe_ratio = stock_info.get('forwardPE', 25)
-    fundamental = "🟢 قيمة جيدة" if pe_ratio < 30 else "🟡 تقييم مرتفع"
-    
-    # 3. شرط الماكرو (Macro)
-    # نستخدم مقارنة بسيطة مع سعر الأسبوع الماضي (اتجاه عام)
+    tech = "🚨 ضغط بيع (فني)" if (price_drop and vol_inc) else "✅ مستقر"
+    # الأساسي
+    pe = stock.info.get('forwardPE', 20)
+    fund = "🟢 قيمة جذابة" if pe < 25 else "🟡 تقييم مرتفع"
+    # الماكرو
     macro = "🟢 إيجابي" if hist['Close'].iloc[-1] > hist['Close'].iloc[-5] else "🟡 حذر"
-    
-    return price_drop, vol_inc, fundamental, macro
+    return tech, fund, macro
+
+# ... هنا تضع بقية الكود الخاص بك (دالة get_stock_details وكل ما يليها) ...
+# تأكد عند وضع "الخطوة 2" أن تضعها في نفس المكان الذي أشرت إليه في صورتك (سطر 87)
+# ولا تضع أي مسافات في بداية الأسطر إلا إذا كانت داخل دالة.
 
 # 1. إعدادات الصفحة المخصصة للعرض على الهواتف الذكية بأسلوب احترافي مريح
 st.set_page_config(
@@ -74,10 +80,6 @@ hv = st.sidebar.number_input("(HV %) التقلب التاريخي المحسو�
 
 # تحليل بيئة العمل الحالية وعرض بطاقة التوصية الذكية بناءً على المعطيات
 iv_hv_ratio = iv / hv if hv > 0 else 1.0
-
-# 5. --- الشاشة الرئيسية وعناوين المحرك ---
-st.title("📈 PREMIUM STRATEGY ENGINE")
-st.subheader(f"رمز السهم النشط: {ticker_input} — {company_name}")
 
 # 5. --- الشاشة الرئيسية وعناوين المحرك ---
 st.title("📈 PREMIUM STRATEGY ENGINE")
