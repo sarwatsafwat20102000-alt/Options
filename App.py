@@ -4,28 +4,57 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# إعدادات الصفحة
+# 1. إعدادات الصفحة
 st.set_page_config(page_title="Premium Intelligence Engine", layout="wide", initial_sidebar_state="expanded")
 
-# دالة الإشارات الذكية المدمجة (الخطوة 1)
+# 2. التنسيق
+st.markdown("""
+<style>
+    .block-container { padding-top: 1rem; background-color: #0d1117; }
+    h1, h2, h3 { color: #ccff00 !important; font-family: 'Courier New', monospace; }
+</style>
+""", unsafe_allow_html=True)
+
+# 3. الدوال البرمجية (يجب أن تبدأ من أول السطر بدون مسافات)
 @st.cache_resource
-def get_advanced_signals(ticker):
-    stock = yf.Ticker(ticker)
-    hist = stock.history(period="5d")
-    # الفني: نقص سعر ليومين + زيادة حجم ليومين
+def check_signals(ticker, stock_info, hist):
     price_drop = (hist['Close'].iloc[-1] < hist['Close'].iloc[-2]) and (hist['Close'].iloc[-2] < hist['Close'].iloc[-3])
     vol_inc = (hist['Volume'].iloc[-1] > hist['Volume'].iloc[-2]) and (hist['Volume'].iloc[-2] > hist['Volume'].iloc[-3])
     tech = "🚨 ضغط بيع (فني)" if (price_drop and vol_inc) else "✅ مستقر"
-    # الأساسي
-    pe = stock.info.get('forwardPE', 20)
+    pe = stock_info.get('forwardPE', 20)
     fund = "🟢 قيمة جذابة" if pe < 25 else "🟡 تقييم مرتفع"
-    # الماكرو
     macro = "🟢 إيجابي" if hist['Close'].iloc[-1] > hist['Close'].iloc[-5] else "🟡 حذر"
     return tech, fund, macro
 
-# ... هنا تضع بقية الكود الخاص بك (دالة get_stock_details وكل ما يليها) ...
-# تأكد عند وضع "الخطوة 2" أن تضعها في نفس المكان الذي أشرت إليه في صورتك (سطر 87)
-# ولا تضع أي مسافات في بداية الأسطر إلا إذا كانت داخل دالة.
+@st.cache_resource
+def get_stock_details(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="5d")
+        price = float(hist['Close'].iloc[-1]) if not hist.empty else 150.0
+        return stock, price, stock.info.get('longName', ticker)
+    except:
+        return None, 150.0, "Simulation Mode"
+
+# 4. التنفيذ الرئيسي
+st.sidebar.header("📊 MARKET INPUTS")
+ticker_input = st.sidebar.text_input("Ticker", value="NVDA").upper().strip()
+stock_obj, price_now, company_name = get_stock_details(ticker_input)
+hist = stock_obj.history(period="5d") if stock_obj else pd.DataFrame()
+
+# العنوان والإشارات (لا تكرار هنا)
+st.title("📈 PREMIUM STRATEGY ENGINE")
+st.subheader(f"رمز السهم النشط: {ticker_input} — {company_name}")
+
+if stock_obj:
+    tech, fund, macro = check_signals(ticker_input, stock_obj.info, hist)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("الفني", tech)
+    col2.metric("الأساسي", fund)
+    col3.metric("الماكرو", macro)
+
+st.markdown("---")
+st.write("التطبيق يعمل الآن. يمكنك إضافة باقي الجدول والرسوم تحت هذا الخط.")
 
 # 1. إعدادات الصفحة المخصصة للعرض على الهواتف الذكية بأسلوب احترافي مريح
 st.set_page_config(
