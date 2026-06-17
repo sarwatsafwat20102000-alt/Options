@@ -4,45 +4,59 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# إعدادات الواجهة
-st.set_page_config(page_title="Premium Intelligence Engine", layout="wide")
+# 1. إعدادات الصفحة
+st.set_page_config(page_title="Premium Intelligence Engine", layout="wide", initial_sidebar_state="expanded")
 
-# (استخدم نفس CSS السابق لتنسيق الواجهة كما في صورك)
+# 2. تنسيق الواجهة
+st.markdown("""
+<style>
+    .block-container { padding-top: 1rem; background-color: #0d1117; }
+    h1, h2, h3 { color: #ccff00 !important; font-family: 'Courier New', monospace; }
+    .stMetric { background-color: #161b22; padding: 12px; border-radius: 10px; border: 1px solid #30363d; }
+</style>
+""", unsafe_allow_html=True)
 
+# 3. القائمة الجانبية ومدخلات السوق
 st.sidebar.header("📊 MARKET INPUTS")
-ticker_input = st.sidebar.text_input("Ticker", value="NVDA").upper()
+ticker_input = st.sidebar.text_input("رمز السهم (Ticker)", value="NVDA").upper().strip()
 
-# دالة التحليل الذكي
-def get_analysis(ticker):
+@st.cache_resource
+def get_data(ticker):
     stock = yf.Ticker(ticker)
     hist = stock.history(period="5d")
-    
-    # 1. منطق زيادة الحجم مع نقص السعر (Technical Signal)
-    price_drop = (hist['Close'].iloc[-1] < hist['Close'].iloc[-2]) and (hist['Close'].iloc[-2] < hist['Close'].iloc[-3])
-    vol_inc = (hist['Volume'].iloc[-1] > hist['Volume'].iloc[-2]) and (hist['Volume'].iloc[-2] > hist['Volume'].iloc[-3])
-    
-    # 2. إشارات الأساسيات (Fundamental) - محاكاة للبيانات المتاحة
-    pe_ratio = stock.info.get('forwardPE', 25)
-    fundamental_signal = "🟢 قيمة جيدة" if pe_ratio < 30 else "🟡 تقييم مرتفع"
-    
-    # 3. إشارات الماكرو (Macro/News) - منطق مقترح
-    macro_signal = "🟢 استقرار" if hist['Close'].iloc[-1] > hist['Close'].iloc[-5] else "🟡 حذر بسبب الماكرو"
-    
-    return hist, price_drop, vol_inc, fundamental_signal, macro_signal
+    price = float(hist['Close'].iloc[-1])
+    return hist, price, stock
 
-hist, p_drop, v_inc, fund_sig, macro_sig = get_analysis(ticker_input)
+hist, price_now, stock = get_data(ticker_input)
 
-# عرض إشارات الشراء
+# --- كود إشارات الشراء (Buying Signals Logic) ---
+def analyze_signals(df, stock_info):
+    # الفني: نقص السعر يومين + زيادة حجم التداول يومين
+    price_drop = (df['Close'].iloc[-1] < df['Close'].iloc[-2]) and (df['Close'].iloc[-2] < df['Close'].iloc[-3])
+    vol_inc = (df['Volume'].iloc[-1] > df['Volume'].iloc[-2]) and (df['Volume'].iloc[-2] > df['Volume'].iloc[-3])
+    
+    # الأساسي: مكرر الربحية
+    pe = stock_info.info.get('forwardPE', 20)
+    
+    # بناء النتيجة
+    signals = []
+    if price_drop and vol_inc:
+        signals.append(("🚨 ضغط بيع (فني)", "فرصة للمراقبة / Credit Spreads"))
+    
+    fund_msg = "🟢 تقييم جذاب" if pe < 25 else "🟡 تقييم مرتفع"
+    signals.append(("📊 التحليل الأساسي", fund_msg))
+    
+    return signals
+
+signals = analyze_signals(hist, stock)
+
+# عرض الإشارات في أعلى الصفحة
 st.subheader("💡 الإشارات الذكية (Buying Signals)")
-col1, col2, col3 = st.columns(3)
+cols = st.columns(len(signals))
+for i, (title, msg) in enumerate(signals):
+    cols[i].metric(title, msg)
 
-with col1:
-    st.metric("الحالة الفنية", "تنبيه" if (p_drop and v_inc) else "طبيعي")
-    if p_drop and v_inc:
-        st.error("🚨 ضغط بيع مكثف (يومين هبوط + زيادة حجم)")
-with col2:
-    st.metric("التحليل الأساسي", fund_sig)
-with col3:
-    st.metric("تحليل الماكرو", macro_sig)
+st.sidebar.metric("السعر الحالي", f"${price_now:.2f}")
 
-# (استمر في لصق باقي الكود الخاص بالجدول والرسوم البيانية هنا...)
+# --- باقي الكود الخاص بك (المتغيرات والجدول والرسوم) ---
+# [قم بلصق باقي كود الجدول والرسوم الذي أرفقته سابقاً هنا تحت هذا السطر]
